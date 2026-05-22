@@ -1,0 +1,124 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
+  KUBE_NAMESPACE: laravel-app
+
+cache:
+  paths:
+    - vendor/
+    - node_modules/
+
+# ========== STAGE 1: TEST ==========
+composer-test:
+  stage: test
+  image: composer:latest
+  script:
+    - composer install --prefer-dist --no-interaction --no-progress
+    - composer run-script test
+  only:
+    - main
+    - develop
+  artifacts:
+    paths:
+      - vendor/
+    expire_in: 1 hour
+
+php-unit-test:
+  stage: test
+  image: php:8.2-fpm
+  before_script:
+    - apt-get update && apt-get install -y libpq-dev zip unzip git
+    - docker-php-ext-install pdo_pgsql pgsql
+    - curl -sS https://getcomposer.org/installer | php
+    - php composer.phar install --no-interaction
+  script:
+    - php artisan key:generate
+    - php artisan config:clear
+    - php artisan test
+  only:
+    - main
+    - develop
+
+# ========== STAGE 2: BUILD ==========
+build-image:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    # Build Docker image
+    - docker build --pull -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+    - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE:latest
+    
+    # Scan for vulnerabilities (opsional)
+    - docker scan $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA || true
+    
+    # Push to registry
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE:latest
+  only:
+    - main
+    - develop
+
+# ========== STAGE 3: DEPLOY ==========
+deploy-staging:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  before_script:
+    # Setup kubeconfig
+    - mkdir -p $HOME/.kube
+    - echo "$KUBE_CONFIG_STAGING" | base64 -d > $HOME/.kube/config
+    
+    # Install kustomize
+    - curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+    - mv kustomize /usr/local/bin/
+  script:
+    # Update image tag in deployment
+    - kustomize edit set image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    
+    # Apply manifests
+    - kubectl apply -k k8s/
+    
+    # Wait for rollout
+    - kubectl rollout status deployment/laravel-app -n $KUBE_NAMESPACE --timeout=5m
+    
+    # Run migrations
+    #- kubectl exec -n $KUBE_NAMESPACE deployment/laravel-app -- php artisan migrate --force
+    
+    # Clear cache
+    - kubectl exec -n $KUBE_NAMESPACE deployment/laravel-app -- php artisan config:clear
+    - kubectl exec -n $KUBE_NAMESPACE deployment/laravel-app -- php artisan cache:clear
+  only:
+    - develop
+  environment:
+    name: staging
+    url: https://staging.laravel.example.com
+
+deploy-production:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  before_script:
+    - mkdir -p $HOME/.kube
+    - echo "$KUBE_CONFIG_PRODUCTION" | base64 -d > $HOME/.kube/config
+    - curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+    - mv kustomize /usr/local/bin/
+  script:
+    - kustomize edit set image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - kubectl apply -k k8s/
+    - kubectl rollout status deployment/laravel-app -n $KUBE_NAMESPACE --timeout=5m
+    - kubectl exec -n $KUBE_NAMESPACE deployment/laravel-app -- php artisan migrate --force
+    - kubectl exec -n $KUBE_NAMESPACE deployment/laravel-app -- php artisan config:cache
+  only:
+    - main
+  when: manual
+  environment:
+    name: production
+    url: https://laravel.example.com
