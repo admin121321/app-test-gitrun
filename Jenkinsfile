@@ -32,45 +32,31 @@ pipeline {
         //     }
         // }
 
-        // stage('Build Docker Image') {
-        //     steps {
-        //         script {
-        //             docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
-        //         }
-        //     }
-        // }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                }
+            }
+        }
 
-        // stage('Push to Registry') {
-        //     steps {
-        //         script {
-        //             docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker_hub_credentials') {
-        //                 docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push()
-        //                 docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push('latest')
-        //             }
-        //         }
-        //     }
-        // }
+        stage('Push to Registry') {
+            steps {
+                script {
+                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker_hub_credentials') {
+                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push()
+                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push('latest')
+                    }
+                }
+            }
+        }
 
-        // stage('Deploy to Server') {
-        //     steps {
-        //         sshagent(['server_deploy_key']) {
-        //             sh """
-        //                 ssh -o StrictHostKeyChecking=no ususbuntu@10.40.120.216 '
-        //                     docker pull ${DOCKER_IMAGE}:${DOCKER_TAG}
-        //                     cd /opt/laravel-app
-        //                     docker-compose down
-        //                     docker-compose up -d
-        //                     docker exec laravel_app php artisan migrate --force
-        //                 '
-        //             """
-        //         }
-        //     }
-         stage('Deploy to Server') {
+        stage('Deploy to Server') {
             steps {
                 sshagent(['server_deploy_key']) {
                     sh """
                         ssh -o StrictHostKeyChecking=no ususbuntu@10.40.120.216 '
-                            
+                            docker pull ${DOCKER_IMAGE}:${DOCKER_TAG}
                             cd /opt/laravel-app
                             docker-compose down
                             docker-compose up -d
