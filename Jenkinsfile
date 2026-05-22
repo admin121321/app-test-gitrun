@@ -43,7 +43,7 @@ pipeline {
         stage('Push to Registry') {
             steps {
                 script {
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'dckr_pat_DLdfLpRzcDZB6XTlNsyB6YLi5Hw') {
+                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker_hub_credentials') {
                         docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push()
                         docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push('latest')
                     }
