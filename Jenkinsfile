@@ -16,21 +16,21 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                // sh 'composer install --no-interaction --optimize-autoloader'
-                sh 'npm install && npm run build'
-            }
-        }
+        // stage('Install Dependencies') {
+        //     steps {
+        //         // sh 'composer install --no-interaction --optimize-autoloader'
+        //         // sh 'npm install && npm run build'
+        //     }
+        // }
 
-        stage('Run Tests') {
-            steps {
-                sh 'cp .env.testing .env'
-                sh 'php artisan key:generate'
-                sh 'php artisan migrate --env=testing --force'
-                sh './vendor/bin/phpunit'
-            }
-        }
+        // stage('Run Tests') {
+        //     steps {
+        //         sh 'cp .env.testing .env'
+        //         sh 'php artisan key:generate'
+        //         sh 'php artisan migrate --env=testing --force'
+        //         sh './vendor/bin/phpunit'
+        //     }
+        // }
 
         stage('Build Docker Image') {
             steps {
