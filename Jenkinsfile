@@ -18,7 +18,7 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'composer install --no-interaction --optimize-autoloader'
+                // sh 'composer install --no-interaction --optimize-autoloader'
                 sh 'npm install && npm run build'
             }
         }
